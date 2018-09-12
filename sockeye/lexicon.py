@@ -188,17 +188,24 @@ class TopKLexicon:
         Lookup possible target ids for input sequence of source ids.
 
         :param src_ids: Sequences of source ids in shape (batch_size, source_length).
-        :return: Possible target ids for source (unique, always includes special symbols,
-                 padded to theoretical maximum length: special + (source_length * K)).
+        :return: Possible target ids for source (unique, always includes special symbols).  Result
+                 is a 1D array padded to min(special_symbols + (batch_size * source_length * k),
+                 full_target_vocab_size).
         """
         # TODO: When MXNet adds support for set operations, we can migrate to avoid conversions to/from NumPy.
         unique_src_ids = np.lib.arraysetops.unique(src_ids)
         trg_ids = np.lib.arraysetops.union1d(self.always_allow, self.lex[unique_src_ids, :].reshape(-1))
-        # Enforce theoretical max length for static shapes: special + (source_length * K)
-        static_length = self.always_allow.shape[0] + (src_ids.shape[1] * self.lex.shape[1])
-        padded_trg_ids = np.full(static_length, C.PAD_ID)
+        # Enforce theoretical max size for predictable shape
+        padded_trg_ids = np.full(self.get_trg_ids_size(*src_ids.shape), C.PAD_ID)
         padded_trg_ids[:trg_ids.shape[0]] = trg_ids
         return padded_trg_ids
+
+    def get_trg_ids_size(self, batch_size: int, src_len: int) -> int:
+        """
+        Get theoretical max size of target ids for input batch:
+        min(special_symbols + (batch_size * source_length * k), full_target_vocab_size)
+        """
+        return min(self.always_allow.shape[0] + (batch_size * src_len * self.lex.shape[1]), len(self.vocab_target))
 
 
 def create(args):
