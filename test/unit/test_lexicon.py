@@ -55,31 +55,82 @@ def test_topk_lexicon():
         lex.load(json_lex_path)
         assert np.all(lex.lex == expected_sorted)
 
+        def make_src_batch(words):
+            # size (1, src_len)
+            return np.array([[vocab[word] for word in words]], dtype=np.int)
+
+        def make_trg(words):
+            # size (trg_len)
+            return np.array([vocab[word] for word in words], dtype=np.int)
+
         # Test lookup
-        trg_ids = lex.get_trg_ids(np.array([[vocab["a"], vocab["c"]]], dtype=np.int))
-        expected = np.array([vocab[symbol] for symbol in C.VOCAB_SYMBOLS + ["a", "b"]], dtype=np.int)
-        assert np.all(trg_ids == expected)
 
-        trg_ids = lex.get_trg_ids(np.array([[vocab["b"]]], dtype=np.int))
-        expected = np.array([vocab[symbol] for symbol in C.VOCAB_SYMBOLS + ["b"]], dtype=np.int)
-        assert np.all(trg_ids == expected)
+        src_ids = make_src_batch(["a"])
+        expected_size = lex.get_trg_ids_size(*src_ids.shape)
+        gold_expected_size = len(C.VOCAB_SYMBOLS) + (k * 1)
+        assert expected_size == gold_expected_size
+        trg_ids = lex.get_trg_ids(src_ids)
+        gold_trg_ids = make_trg(C.VOCAB_SYMBOLS + ["a", "b"])
+        assert np.all(trg_ids == gold_trg_ids)
 
-        trg_ids = lex.get_trg_ids(np.array([[vocab["c"]]], dtype=np.int))
-        expected = np.array([vocab[symbol] for symbol in C.VOCAB_SYMBOLS], dtype=np.int)
-        assert np.all(trg_ids == expected)
+        src_ids = make_src_batch(["b"])
+        expected_size = lex.get_trg_ids_size(*src_ids.shape)
+        gold_expected_size = len(C.VOCAB_SYMBOLS) + (k * 1)
+        assert expected_size == gold_expected_size
+        trg_ids = lex.get_trg_ids(src_ids)
+        gold_trg_ids = make_trg(C.VOCAB_SYMBOLS + ["b", C.PAD_SYMBOL])
+        assert np.all(trg_ids == gold_trg_ids)
 
-        # Test load with smaller k
+        src_ids = make_src_batch(["c"])
+        expected_size = lex.get_trg_ids_size(*src_ids.shape)
+        gold_expected_size = len(C.VOCAB_SYMBOLS) + (k * 1)
+        assert expected_size == gold_expected_size
+        trg_ids = lex.get_trg_ids(src_ids)
+        gold_trg_ids = make_trg(C.VOCAB_SYMBOLS + [C.PAD_SYMBOL, C.PAD_SYMBOL])
+        assert np.all(trg_ids == gold_trg_ids)
+
+        src_ids = make_src_batch(["a", "b"])
+        expected_size = lex.get_trg_ids_size(*src_ids.shape)
+        # Capped to special + vocab_size
+        gold_expected_size = len(C.VOCAB_SYMBOLS) + 3
+        assert expected_size == gold_expected_size
+        trg_ids = lex.get_trg_ids(src_ids)
+        # Capped to special + vocab_size
+        gold_trg_ids = make_trg(C.VOCAB_SYMBOLS + ["a", "b", C.PAD_SYMBOL])
+        assert np.all(trg_ids == gold_trg_ids)
+
+        src_ids = make_src_batch(["a", "b", "c"])
+        expected_size = lex.get_trg_ids_size(*src_ids.shape)
+        # Capped to special + vocab_size
+        gold_expected_size = len(C.VOCAB_SYMBOLS) + 3
+        assert expected_size == gold_expected_size
+        trg_ids = lex.get_trg_ids(src_ids)
+        # Capped to special + vocab_size
+        gold_trg_ids = make_trg(C.VOCAB_SYMBOLS + ["a", "b", C.PAD_SYMBOL])
+        assert np.all(trg_ids == gold_trg_ids)
+
+        # Test smaller k
         small_k = k - 1
         lex.load(json_lex_path, k=small_k)
         assert lex.lex.shape[1] == small_k
-        trg_ids = lex.get_trg_ids(np.array([[vocab["a"]]], dtype=np.int))
-        expected = np.array([vocab[symbol] for symbol in C.VOCAB_SYMBOLS + ["a"]], dtype=np.int)
-        assert np.all(trg_ids == expected)
+        src_ids = make_src_batch(["a"])
+        expected_size = lex.get_trg_ids_size(*src_ids.shape)
+        gold_expected_size = len(C.VOCAB_SYMBOLS) + (small_k * 1)
+        assert expected_size == gold_expected_size
+        trg_ids = lex.get_trg_ids(src_ids)
+        gold_trg_ids = make_trg(C.VOCAB_SYMBOLS + ["a"])
+        assert np.all(trg_ids == gold_trg_ids)
 
-        # Test load with larger k
+        # Test larger k
         large_k = k + 1
         lex.load(json_lex_path, k=large_k)
+        # Can only load k
         assert lex.lex.shape[1] == k
-        trg_ids = lex.get_trg_ids(np.array([[vocab["a"], vocab["c"]]], dtype=np.int))
-        expected = np.array([vocab[symbol] for symbol in C.VOCAB_SYMBOLS + ["a", "b"]], dtype=np.int)
-        assert np.all(trg_ids == expected)
+        src_ids = make_src_batch(["a", "c"])
+        expected_size = lex.get_trg_ids_size(*src_ids.shape)
+        # Capped to special + vocab_size
+        gold_expected_size = len(C.VOCAB_SYMBOLS) + 3
+        assert expected_size == gold_expected_size
+        trg_ids = lex.get_trg_ids(src_ids)
+        gold_trg_ids = make_trg(C.VOCAB_SYMBOLS + ["a", "b", C.PAD_SYMBOL])
+        assert np.all(trg_ids == gold_trg_ids)
