@@ -398,6 +398,23 @@ def test_topk_func(batch_size, beam_size, target_vocab_size):
     assert all(mx_word == np_word)
     assert all(mx_values == np_values)
 
+    topk = sockeye.inference.TopK(k=beam_size, batch_size=batch_size, vocab_size=target_vocab_size)
+    topk.initialize()
+    assert all(topk.offset.data() == offset)
+
+    mx_hyp, mx_word, mx_values = topk(scores)
+    mx_hyp, mx_word, mx_values = mx_hyp.asnumpy(), mx_word.asnumpy(), mx_values.asnumpy()
+    assert all(mx_hyp == np_hyp)
+    assert all(mx_word == np_word)
+    assert all(mx_values == np_values)
+
+    topk.hybridize()
+    mx_hyp, mx_word, mx_values = topk(scores)
+    mx_hyp, mx_word, mx_values = mx_hyp.asnumpy(), mx_word.asnumpy(), mx_values.asnumpy()
+    assert all(mx_hyp == np_hyp)
+    assert all(mx_word == np_word)
+    assert all(mx_values == np_values)
+
 
 def test_get_best_word_indeces_for_kth_hypotheses():
     # data
@@ -425,6 +442,7 @@ def test_get_best_word_indeces_for_kth_hypotheses():
     result = sockeye.inference.Translator._get_best_word_indeces_for_kth_hypotheses(ks, all_hyp_indices)
     assert result.shape == expected_indices.shape
     assert (result == expected_indices).all()
+
 
 @pytest.mark.parametrize("raw_constraints, beam_histories, expected_best_ids, expected_best_indices",
                         [([[], [], [], []], [None, None], np.array([0, 2], dtype='int32'), np.array([[1, 1, 1], [3, 3, 3]], dtype='int32')),
