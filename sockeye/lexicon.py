@@ -187,13 +187,18 @@ class TopKLexicon:
         """
         Lookup possible target ids for input sequence of source ids.
 
-        :param src_ids: Sequence(s) of source ids (any shape).
-        :return: Possible target ids for source (unique sorted, always includes special symbols).
+        :param src_ids: Sequences of source ids in shape (batch_size, source_length).
+        :return: Possible target ids for source (unique, always includes special symbols,
+                 padded to theoretical maximum length: special + (source_length * K)).
         """
         # TODO: When MXNet adds support for set operations, we can migrate to avoid conversions to/from NumPy.
         unique_src_ids = np.lib.arraysetops.unique(src_ids)
         trg_ids = np.lib.arraysetops.union1d(self.always_allow, self.lex[unique_src_ids, :].reshape(-1))
-        return trg_ids
+        # Enforce theoretical max length for static shapes: special + (source_length * K)
+        static_length = self.always_allow.shape[0] + (src_ids.shape[1] * self.lex.shape[1])
+        padded_trg_ids = np.full(static_length, C.PAD_ID)
+        padded_trg_ids[:trg_ids.shape[0]] = trg_ids
+        return padded_trg_ids
 
 
 def create(args):
