@@ -11,40 +11,32 @@
 # express or implied. See the License for the specific language governing
 # permissions and limitations under the License.
 
-"""
-Load a trained model and run it to score validation data.
-"""
 import argparse
-import os
-import shutil
-import sys
-import tempfile
-from contextlib import ExitStack
-from typing import Any, cast, Optional, Dict, List, Tuple
+import logging
 
 import mxnet as mx
 
 
 def main():
-    # Arguments
-    params = argparse.ArgumentParser(description="Load a Sockeye MXNet model and score validation data.")
+    params = argparse.ArgumentParser(description="Load pre-trained MXNet model and score validation data.")
     params.add_argument("--symbol", "-s", required=True,
-                        help="MXNet symbol file (usually named symbol.json).")
+                        help="MXNet symbol file (named `MODEL-symbol.json' or similar).")
     params.add_argument("--params", "-p", required=True,
-                        help="MXNet params file (usually named params.best).")
-    params.add_argument("--validation-source", "-vs", required=True,
-                        help="Validation source file.")
-    params.add_argument("--validation-target", "-vt", required=True,
-                        help="Validation target file.")
+                        help="MXNet params file (named `MODEL-CHECKPOINT.params' or similar).")
+    params.add_argument("--data", "-d", required=True,
+                        help="Validation data file (MXNet str->NDArray dict format).")
+    params.add_argument("--label", "-l", required=True,
+                        help="Validation label file (MXNet str->NDArray dict format).")
     params.add_argument("--batch-size", "-b", type=int, default=64,
                         help="Validation target file. Default: %(default)s.")
     args = params.parse_args()
 
-    # Use CPU for initial testing
-    ctx = mx.cpu()
+    logging.basicConfig(level=logging.INFO, format="%(message)s")
 
-    # Load symbol and params
+    logging.info("Loading symbol file `%s'." % args.symbol)
     symbol = mx.sym.load(args.symbol)
+
+    logging.info("Loading params file `%s'." % args.params)
     save_dict = mx.nd.load(args.params)
     arg_params = {}
     aux_params = {}
@@ -55,36 +47,22 @@ def main():
         if tp == "aux":
             aux_params[name] = v
 
-    # Create module
+    logging.info("Loading data file `%s'." % args.data)
+    data = mx.nd.load(args.data)
 
-    # Sockeye constants
-    SOURCE_NAME = "source"
-    TARGET_NAME = "target"
-    TARGET_LABEL_NAME = "target_label"
-    LAYOUT_BATCH_MAJOR = "NCHW"
+    logging.info("Loading label file `%s'." % args.label)
+    label = mx.nd.load(args.label)
 
-    data_names = [SOURCE_NAME, TARGET_NAME]
-    label_names = [TARGET_LABEL_NAME]
+    logging.info("Creating data iterator with batch size %d." % args.batch_size)
+    nd_iter = mx.io.NDArrayIter(data=data, label=label, batch_size=args.batch_size)
 
-    # TODO
-    default_bucket_key = [100, 100]
-    num_factors = 1
-
-    provide_data = [
-        mx.io.DataDesc(name=SOURCE_NAME,
-                       shape=(args.batch_size, default_bucket_key[0], num_factors),
-                       layout=LAYOUT_BATCH_MAJOR),
-        mx.io.DataDesc(name=TARGET_NAME,
-                       shape=(args.batch_size, default_bucket_key[1]),
-                       layout=LAYOUT_BATCH_MAJOR)]
-    provide_label = [
-        mx.io.DataDesc(name=TARGET_LABEL_NAME,
-                       shape=(args.batch_size, default_bucket_key[1]),
-                       layout=LAYOUT_BATCH_MAJOR)]
-
-    module = mx.mod.Module(symbol=symbol, data_names=data_names, label_names=label_names, context=ctx)
-    module.bind(data_shapes=provide_data, label_shapes=provide_label, for_training=True)
+    logging.info("Creating module.")
+    module = mx.mod.Module(symbol=symbol, data_names=list(data.keys()), label_names=list(label.keys()))
+    module.bind(data_shapes=nd_iter.provide_data, label_shapes=nd_iter.provide_label, for_training=True)
     module.set_params(arg_params, aux_params)
+
+    for batch in nd_iter:
+        module.forward_backward(batch)
 
 
 if __name__ == "__main__":
