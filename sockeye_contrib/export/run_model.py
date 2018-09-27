@@ -17,7 +17,6 @@ import logging
 
 import mxnet as mx
 
-import sockeye.constants as C
 
 def main():
     params = argparse.ArgumentParser(description="Load pre-trained MXNet model and score validation data.")
@@ -74,8 +73,9 @@ def main():
     for batch in nd_iter:
         module.forward(batch, is_train=False)
         module.update_metric(metric, batch.label)
-
-    print(metric.get_name_value())
+    results = metric.get_name_value()
+    for k, v in results:
+        print(k, v)
 
 
 if __name__ == "__main__":
