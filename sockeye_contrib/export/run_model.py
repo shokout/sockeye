@@ -12,10 +12,12 @@
 # permissions and limitations under the License.
 
 import argparse
+import json
 import logging
 
 import mxnet as mx
 
+import sockeye.constants as C
 
 def main():
     params = argparse.ArgumentParser(description="Load pre-trained MXNet model and score validation data.")
@@ -23,6 +25,8 @@ def main():
                         help="MXNet symbol file (named `MODEL-symbol.json' or similar).")
     params.add_argument("--params", "-p", required=True,
                         help="MXNet params file (named `MODEL-CHECKPOINT.params' or similar).")
+    params.add_argument("--metric", "-m", required=True,
+                        help="MXNet EvalMetric config (JSON file).")
     params.add_argument("--data", "-d", required=True,
                         help="Validation data file (MXNet str->NDArray dict format).")
     params.add_argument("--label", "-l", required=True,
@@ -47,6 +51,11 @@ def main():
         if tp == "aux":
             aux_params[name] = v
 
+    logging.info("Loading metric file `%s'." % args.metric)
+    with open(args.metric, "r") as inp:
+        config = json.load(inp)
+    metric = mx.metric.create(**config)
+
     logging.info("Loading data file `%s'." % args.data)
     data = mx.nd.load(args.data)
 
@@ -61,8 +70,12 @@ def main():
     module.bind(data_shapes=nd_iter.provide_data, label_shapes=nd_iter.provide_label, for_training=True)
     module.set_params(arg_params, aux_params)
 
+    logging.info("Scoring validation data")
     for batch in nd_iter:
-        module.forward_backward(batch)
+        module.forward(batch, is_train=False)
+        module.update_metric(metric, batch.label)
+
+    print(metric.get_name_value())
 
 
 if __name__ == "__main__":
